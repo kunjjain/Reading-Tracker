@@ -196,7 +196,7 @@ body{margin:0}
     <button class="btn primary" id="addbtn" type="button">Add manhwa</button>
     <button class="btn" id="exportbtn" type="button">Export backup</button>
     <button class="btn" id="importbtn" type="button">Import</button>
-    <input type="file" id="importfile" accept="application/json,.json" hidden>
+    <input type="file" id="importfile" accept="application/json,.json,.csv,text/csv" hidden>
   </div>
 
   <section class="panel" id="addpanel" hidden aria-label="Add a manhwa"></section>
@@ -645,18 +645,69 @@ body{margin:0}
     say('Backup downloaded.');
   });
   document.getElementById('importbtn').addEventListener('click', function () { document.getElementById('importfile').click(); });
+  /* Comick "my list" CSV: hid,title,type,rating,origination,read,last_read,... */
+  function parseCsv(text) {
+    var out = [], row = [], cur = '', q = false, i = 0;
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    for (; i < text.length; i++) {
+      var c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+        else cur += c;
+      } else if (c === '"') q = true;
+      else if (c === ',') { row.push(cur); cur = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(cur); cur = ''; out.push(row); row = [];
+      } else cur += c;
+    }
+    if (cur !== '' || row.length) { row.push(cur); out.push(row); }
+    return out.filter(function (r) { return r.some(function (x) { return x.trim() !== ''; }); });
+  }
+  var COMICK_STATUS = { 'reading': 'reading', 'completed': 'completed', 'on-hold': 'hold', 'on hold': 'hold', 'dropped': 'dropped', 'plan to read': 'plan' };
+  function comickToItems(text) {
+    var rowsCsv = parseCsv(text);
+    if (!rowsCsv.length) return null;
+    var head = rowsCsv[0].map(function (x) { return x.trim().toLowerCase(); });
+    var ix = function (n) { return head.indexOf(n); };
+    if (ix('title') < 0 || ix('hid') < 0) return null;
+    var items = {};
+    rowsCsv.slice(1).forEach(function (r) {
+      var title = (r[ix('title')] || '').trim(), hid = (r[ix('hid')] || '').trim();
+      if (!title || !/^[A-Za-z0-9_-]{1,64}$/.test(hid)) return;
+      var ch = parseFloat(r[ix('read')]); ch = ch > 0 ? Math.floor(ch) : 0;
+      var when = Date.parse(r[ix('last_read')] || ''); 
+      var type = (r[ix('origination')] || '').trim();
+      items[hid] = {
+        title: title, chapter: ch, total: null, sites: [],
+        status: COMICK_STATUS[(r[ix('type')] || '').trim().toLowerCase()] || 'reading',
+        note: type && type.toLowerCase() !== 'manhwa' ? type : '',
+        cover: '', updated: when > 0 ? when : 0
+      };
+    });
+    return items;
+  }
+
   document.getElementById('importfile').addEventListener('change', function (e) {
     var f = e.target.files[0]; if (!f) return;
     var r = new FileReader();
     r.onload = function () {
-      var o;
-      try { o = JSON.parse(r.result); } catch (x) { o = null; }
-      if (!o || typeof o !== 'object' || Array.isArray(o)) { say('That file is not a Manhwa Log backup.', true); e.target.value = ''; return; }
-      var good = {}, n = 0;
-      Object.keys(o).forEach(function (k) { if (o[k] && typeof o[k].title === 'string') { good[k] = o[k]; n++; } });
-      if (!n) { say('That file has no titles in it.', true); e.target.value = ''; return; }
-      db.importAll(good).then(function () { say('Imported ' + n + (n === 1 ? ' title.' : ' titles.')); })
-        .catch(function () { say('Import failed. Check your connection and try again.', true); });
+      var text = String(r.result || ''), good = {}, n = 0, skipped = 0, o = null;
+      var isCsv = /\.csv$/i.test(f.name) || (text.replace(/^﻿/, '').trim().charAt(0) !== '{');
+      if (isCsv) {
+        o = comickToItems(text);
+        if (!o) { say('That CSV is not a Comick list export.', true); e.target.value = ''; return; }
+        var have = db.all();
+        Object.keys(o).forEach(function (k) { if (have[k]) skipped++; else { good[k] = o[k]; n++; } });
+      } else {
+        try { o = JSON.parse(text); } catch (x) { o = null; }
+        if (!o || typeof o !== 'object' || Array.isArray(o)) { say('That file is not a Manhwa Log backup.', true); e.target.value = ''; return; }
+        Object.keys(o).forEach(function (k) { if (o[k] && typeof o[k].title === 'string') { good[k] = o[k]; n++; } });
+      }
+      if (!n) { say(skipped ? 'Everything in that file is already in your list.' : 'That file has no titles in it.', true); e.target.value = ''; return; }
+      db.importAll(good).then(function () {
+        say('Imported ' + n + (n === 1 ? ' title' : ' titles') + (skipped ? ', skipped ' + skipped + ' already in your list.' : '.'));
+      }).catch(function () { say('Import failed. Check your connection and try again.', true); });
       e.target.value = '';
     };
     r.readAsText(f);
