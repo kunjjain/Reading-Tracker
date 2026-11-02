@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Manhwa Log</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=DM+Sans:opsz,wght@9..40,400..700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one tall column of reading cards, like a vertical-scroll strip; counters in mono are the loudest thing on each card. */
+:root {
+  --bg: #F2F1F6;
+  --surface: #FFFFFF;
+  --ink: #16141F;
+  --muted: #666376;
+  --line: #DDDAE8;
+  --accent: #4B3FE0;
+  --accent-ink: #FFFFFF;
+  --reading: #2158D8;
+  --completed: #0F7A58;
+  --hold: #A8680F;
+  --dropped: #BE3447;
+  --plan: #666376;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "DM Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #13121A; --surface: #1C1A26; --ink: #EEEDF5; --muted: #9D9AAF; --line: #2F2C3E;
+    --accent: #968EFF; --accent-ink: #13121A;
+    --reading: #7AA6FF; --completed: #45D6A3; --hold: #EDB74E; --dropped: #FF8090; --plan: #9D9AAF;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #13121A; --surface: #1C1A26; --ink: #EEEDF5; --muted: #9D9AAF; --line: #2F2C3E;
+  --accent: #968EFF; --accent-ink: #13121A;
+  --reading: #7AA6FF; --completed: #45D6A3; --hold: #EDB74E; --dropped: #FF8090; --plan: #9D9AAF;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(34px, 7vw, 54px); line-height: 1; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+.who { display: flex; gap: 14px; align-items: baseline; }
+#app { display: flex; flex-direction: column; gap: 20px; }
+.tally { font-family: var(--font-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
+  padding: 6px 12px; cursor: pointer; display: inline-flex; gap: 8px; align-items: baseline;
+}
+.chip b { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip[aria-pressed="true"] b { color: inherit; opacity: .75; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.toolbar .grow { flex: 1 1 220px; min-width: 0; }
+input[type=text], input[type=search], input[type=number], input[type=email], input[type=password], select, textarea {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; width: 100%; min-width: 0;
+}
+textarea { resize: vertical; min-height: 64px; }
+.toolbar select { width: auto; }
+.btn {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 14px; cursor: pointer; font-weight: 600; white-space: nowrap;
+}
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.danger { color: var(--dropped); }
+.btn[disabled] { opacity: .45; cursor: default; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.panel[hidden] { display: none; }
+form.entry { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px; }
+form.entry .wide { grid-column: 1 / -1; }
+.f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.f label { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.f small { color: var(--muted); font-size: 12px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.name { font-family: var(--font-display); font-weight: 700; font-size: 19px; line-height: 1.15; margin: 0; overflow-wrap: anywhere; min-width: 0; }
+
+.pillwrap { position: relative; flex: none; }
+.pillwrap::after { content: "▾"; position: absolute; right: 9px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--c); pointer-events: none; }
+.pill {
+  appearance: none; -webkit-appearance: none; width: auto; cursor: pointer;
+  color: var(--c); background: color-mix(in srgb, var(--c) 13%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--c) 35%, transparent);
+  border-radius: 999px; padding: 4px 26px 4px 11px; font-size: 13px; font-weight: 600;
+}
+.pill option { color: var(--ink); background: var(--surface); }
+
+.counter { display: flex; align-items: center; gap: 12px; }
+.num { display: flex; align-items: baseline; gap: 6px; flex: 1; min-width: 0; flex-wrap: wrap; }
+.num .n { font-family: var(--font-mono); font-weight: 700; font-size: 34px; line-height: 1; font-variant-numeric: tabular-nums; }
+.num .t { font-family: var(--font-mono); color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
+.num .l { color: var(--muted); font-size: 13px; }
+.step {
+  width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg);
+  font-size: 20px; line-height: 1; cursor: pointer; font-weight: 600; flex: none;
+}
+.step.plus { background: var(--c); color: var(--bg); border-color: var(--c); }
+.step[disabled] { opacity: .4; cursor: default; }
+.bar { height: 5px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--c); border-radius: 999px; }
+
+.hero { display: flex; gap: 14px; align-items: flex-start; }
+.hero .side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.hero .top { flex-direction: column; gap: 8px; align-items: flex-start; }
+.cover {
+  width: 92px; flex: none; aspect-ratio: 2 / 3; border-radius: 8px; overflow: hidden;
+  background: color-mix(in srgb, var(--c, var(--muted)) 16%, var(--surface));
+  border: 1px solid var(--line); display: grid; place-items: center;
+}
+.cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover span { font-family: var(--font-display); font-weight: 800; font-size: 34px; color: var(--c, var(--muted)); }
+.cover.small { width: 56px; }
+.cover.small span { font-size: 22px; }
+.coverfield { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.coverfield input[type=file] { width: auto; max-width: 100%; padding: 7px 10px; }
+.tbtn { background: none; border: 0; border-bottom: 1px dashed var(--muted); padding: 0; cursor: pointer; font: inherit; color: var(--muted); }
+.tbtn:hover { color: var(--ink); border-bottom-color: var(--ink); }
+.tin { width: 84px; padding: 3px 8px; font-family: var(--font-mono); font-size: 15px; border-radius: 8px; }
+.mini { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 1px 7px; font-family: var(--font-mono); font-size: 12px; cursor: pointer; color: var(--ink); }
+.mini:hover { border-color: var(--accent); }
+.sites { display: flex; flex-wrap: wrap; gap: 6px; }
+.site { font-size: 13px; padding: 3px 9px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+a.site:hover { border-color: var(--accent); }
+.nosite { color: var(--muted); font-size: 13px; }
+.note { margin: 0; color: var(--muted); font-size: 13.5px; overflow-wrap: anywhere; }
+.foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: auto; }
+.when { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.linkbtn { background: none; border: 0; padding: 4px 2px; cursor: pointer; color: var(--accent); font-weight: 600; }
+
+.empty { text-align: left; padding: 28px 4px; color: var(--muted); display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.empty strong { color: var(--ink); font-family: var(--font-display); font-size: 22px; }
+.msg { font-size: 13px; color: var(--muted); min-height: 18px; }
+.msg.err { color: var(--dropped); }
+@media (prefers-reduced-motion: no-preference) {
+  .bar i { transition: width .25s ease; }
+}
+[hidden]{display:none!important}
+body{margin:0}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <h1>Manhwa Log</h1>
+    <div class="who"><span class="tally" id="tally"></span><button class="linkbtn" id="signout" type="button" hidden>Sign out</button></div>
+  </header>
+
+  <div class="msg" id="msg" role="status"></div>
+
+  <section class="panel" id="login" hidden aria-label="Sign in">
+    <form class="entry" id="loginform">
+      <p class="note wide">Sign in to see your list.</p>
+      <div class="f"><label for="email">Email</label><input type="email" id="email" autocomplete="username" required></div>
+      <div class="f"><label for="password">Password</label><input type="password" id="password" autocomplete="current-password" required></div>
+      <div class="actions wide"><button class="btn primary" type="submit">Sign in</button></div>
+    </form>
+  </section>
+
+  <div id="app" hidden>
+
+  <div class="chips" id="chips" role="group" aria-label="Filter by status"></div>
+
+  <div class="toolbar">
+    <div class="grow"><label for="q" hidden>Search titles</label><input type="search" id="q" placeholder="Search title, site or note"></div>
+    <label for="sort" hidden>Sort</label>
+    <select id="sort">
+      <option value="recent">Recently updated</option>
+      <option value="title">Title A to Z</option>
+      <option value="chapters">Most chapters read</option>
+    </select>
+    <button class="btn primary" id="addbtn" type="button">Add manhwa</button>
+    <button class="btn" id="exportbtn" type="button">Export backup</button>
+    <button class="btn" id="importbtn" type="button">Import</button>
+    <input type="file" id="importfile" accept="application/json,.json" hidden>
+  </div>
+
+  <section class="panel" id="addpanel" hidden aria-label="Add a manhwa"></section>
+
+  <main id="list" class="grid"></main>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+(function () {
+  /* Supabase URL and key come from config.js, so this file can be replaced freely. */
+  var CFG = window.MANHWA_CONFIG || {};
+  var SUPABASE_URL = CFG.supabaseUrl || '';
+  var SUPABASE_KEY = CFG.supabaseKey || '';
+  var TABLE = 'items';
+
+  var STATUSES = [
+    { k: 'reading', l: 'Reading' },
+    { k: 'completed', l: 'Completed' },
+    { k: 'hold', l: 'On hold' },
+    { k: 'dropped', l: 'Dropped' },
+    { k: 'plan', l: 'Plan to read' }
+  ];
+  var LABEL = {}; STATUSES.forEach(function (s) { LABEL[s.k] = s.l; });
+  var COLLECTION = 'manhwa';
+
+  var db = null, canWrite = true, loaded = false;
+  var rows = [], filter = 'all', query = '', sortBy = 'recent';
+  var editingId = null, draft = null, confirmDel = null, adding = false, newDraft = blank();
+  var pendingRender = false, totalEditId = null, signedIn = false;
+  var listEl = document.getElementById('list');
+
+  function blank() { return { title: '', chapter: '0', total: '', sites: '', status: 'reading', note: '', cover: '' }; }
+
+  function h(tag, attrs) {
+    var e = document.createElement(tag);
+    attrs = attrs || {};
+    for (var k in attrs) {
+      var v = attrs[k];
+      if (v == null || v === false) continue;
+      if (k.indexOf('on') === 0) e.addEventListener(k.slice(2), v);
+      else if (k === 'class') e.className = v;
+      else if (k === 'value' || k === 'disabled' || k === 'checked' || k === 'selected') e[k] = v;
+      else e.setAttribute(k, v === true ? '' : v);
+    }
+    for (var i = 2; i < arguments.length; i++) add(e, arguments[i]);
+    return e;
+  }
+  function add(e, c) {
+    if (c == null || c === false) return;
+    if (Array.isArray(c)) { c.forEach(function (x) { add(e, x); }); return; }
+    e.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
+  }
+
+  var msgEl = document.getElementById('msg'), msgTimer = null;
+  function say(text, isErr) {
+    msgEl.textContent = text || '';
+    msgEl.className = 'msg' + (isErr ? ' err' : '');
+    clearTimeout(msgTimer);
+    if (text && !isErr) msgTimer = setTimeout(function () { msgEl.textContent = ''; }, 3500);
+  }
+
+  function parse(d) {
+    var title = (d.title || '').trim();
+    if (!title) return { error: 'Add a title first.' };
+    var ch = parseInt(d.chapter, 10); if (!(ch >= 0)) ch = 0;
+    var total = parseInt(d.total, 10); total = total > 0 ? total : null;
+    var sites = String(d.sites || '').split(/[,\n]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    return { value: { title: title, chapter: ch, total: total, sites: sites, status: d.status || 'reading', note: (d.note || '').trim(), cover: d.cover || '' } };
+  }
+
+  function resizeCover(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var scale = Math.min(1, 300 / img.width, 450 / img.height);
+        var c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * scale));
+        c.height = Math.max(1, Math.round(img.height * scale));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', 0.78));
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('image')); };
+      img.src = url;
+    });
+  }
+  function coverEl(src, title, small) {
+    var c = h('div', { class: 'cover' + (small ? ' small' : '') });
+    if (src) c.appendChild(h('img', { src: src, alt: 'Cover of ' + title, loading: 'lazy' }));
+    else c.appendChild(h('span', { 'aria-hidden': 'true' }, (title || '?').trim().charAt(0).toUpperCase()));
+    return c;
+  }
+  function saveMsg(e) {
+    return 'Could not save that change. Check your connection, or sign in again.';
+  }
+
+  /* ---------- writes, one at a time per title ---------- */
+  var chains = {};
+  function queue(id, fn) {
+    var p = (chains[id] || Promise.resolve()).then(fn).catch(function (e) {
+      say(saveMsg(e), true);
+    });
+    chains[id] = p; return p;
+  }
+  function rowById(id) { return rows.filter(function (r) { return r.id === id; })[0]; }
+  function bump(id, delta) {
+    queue(id, function () {
+      var r = rowById(id); if (!r) return;
+      var n = Math.max(0, (r.chapter || 0) + delta);
+      var patch = { chapter: n, updated: Date.now() };
+      return db.doc(COLLECTION + '/' + id).update(patch);
+    });
+  }
+  function bumpTotal(id, d) {
+    queue(id, function () {
+      var r = rowById(id); if (!r || !r.total) return;
+      return db.doc(COLLECTION + '/' + id).update({ total: Math.max(1, r.total + d) });
+    });
+  }
+  function saveTotal(id, raw) {
+    if (totalEditId !== id) return;
+    totalEditId = null;
+    var r = rowById(id), t = parseInt(raw, 10); t = t > 0 ? t : null;
+    renderList(true);
+    if (!r || (r.total || null) === t) return;
+    queue(id, function () { return db.doc(COLLECTION + '/' + id).update({ total: t }); });
+  }
+  function totalNote(r) {
+    if (!r.total) return 'chapters read';
+    var d = r.total - (r.chapter || 0);
+    return d <= 0 ? 'read · caught up' : 'read · ' + d + ' behind';
+  }
+  function totalCtl(r) {
+    if (totalEditId === r.id) {
+      var inp = h('input', { type: 'number', class: 'tin', id: 'tot-' + r.id, min: '1', inputmode: 'numeric', 'aria-label': 'Total chapters released', placeholder: 'total', value: r.total ? String(r.total) : '',
+        onkeydown: function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); saveTotal(r.id, e.target.value); }
+          else if (e.key === 'Escape') { totalEditId = null; renderList(true); }
+        },
+        onblur: function (e) { saveTotal(r.id, e.target.value); } });
+      return h('span', { class: 't' }, '/ ', inp);
+    }
+    return h('span', { class: 't' },
+      h('button', { class: 'tbtn', type: 'button', title: 'Change total chapters', 'aria-label': r.total ? 'Total chapters ' + r.total + '. Change it' : 'Set total chapters',
+        onclick: function () { totalEditId = r.id; renderList(true); var i = document.getElementById('tot-' + r.id); if (i) { i.focus(); i.select(); } } },
+        r.total ? '/ ' + r.total : '+ total'),
+      r.total ? [' ', h('button', { class: 'mini', type: 'button', title: 'A new chapter came out', 'aria-label': 'One new chapter released', onclick: function () { bumpTotal(r.id, 1); } }, '+1')] : null);
+  }
+  function setStatus(id, status) {
+    queue(id, function () { return db.doc(COLLECTION + '/' + id).update({ status: status, updated: Date.now() }); });
+  }
+
+  /* ---------- forms ---------- */
+  function field(label, id, input, hint, cls) {
+    return h('div', { class: 'f ' + (cls || '') }, h('label', { for: id }, label), input, hint ? h('small', null, hint) : null);
+  }
+  function entryForm(prefix, d, saveLabel, onSave, onCancel, onDelete) {
+    var title = h('input', { type: 'text', id: prefix + '-title', value: d.title, placeholder: 'Title', autocomplete: 'off', oninput: function (e) { d.title = e.target.value; } });
+    var ch = h('input', { type: 'number', id: prefix + '-ch', min: '0', inputmode: 'numeric', value: String(d.chapter), oninput: function (e) { d.chapter = e.target.value; } });
+    var total = h('input', { type: 'number', id: prefix + '-total', min: '1', inputmode: 'numeric', value: d.total == null ? '' : String(d.total), placeholder: 'Optional', oninput: function (e) { d.total = e.target.value; } });
+    var status = h('select', { id: prefix + '-status', onchange: function (e) { d.status = e.target.value; } },
+      STATUSES.map(function (s) { return h('option', { value: s.k, selected: s.k === d.status }, s.l); }));
+    var sites = h('input', { type: 'text', id: prefix + '-sites', value: d.sites, placeholder: 'asuracomic.net, webtoons.com', autocomplete: 'off', oninput: function (e) { d.sites = e.target.value; } });
+    var note = h('textarea', { id: prefix + '-note', placeholder: 'Anything to remember', oninput: function (e) { d.note = e.target.value; } });
+    note.value = d.note || '';
+    var prev = h('div', { class: 'coverfield' });
+    var file = h('input', { type: 'file', id: prefix + '-cover', accept: 'image/*', onchange: function (e) {
+      var f = e.target.files[0]; if (!f) return;
+      resizeCover(f).then(function (u) { d.cover = u; paintPrev(); }).catch(function () { say('Could not read that image.', true); });
+    } });
+    function paintPrev() {
+      prev.innerHTML = '';
+      prev.appendChild(coverEl(d.cover, d.title, true));
+      prev.appendChild(file);
+      if (d.cover) prev.appendChild(h('button', { class: 'btn', type: 'button', onclick: function () { d.cover = ''; file.value = ''; paintPrev(); } }, 'Remove cover'));
+    }
+    paintPrev();
+    var buttons = [
+      h('button', { class: 'btn primary', type: 'submit' }, saveLabel),
+      h('button', { class: 'btn', type: 'button', onclick: onCancel }, 'Cancel')
+    ];
+    if (onDelete) {
+      if (confirmDel === d._id) {
+        buttons.push(h('span', { class: 'when' }, 'Delete this title?'));
+        buttons.push(h('button', { class: 'btn danger', type: 'button', onclick: onDelete }, 'Yes, delete'));
+        buttons.push(h('button', { class: 'btn', type: 'button', onclick: function () { confirmDel = null; renderList(true); } }, 'Keep'));
+      } else {
+        buttons.push(h('button', { class: 'btn danger', type: 'button', onclick: function () { confirmDel = d._id; renderList(true); } }, 'Delete'));
+      }
+    }
+    return h('form', { class: 'entry', onsubmit: function (e) { e.preventDefault(); onSave(); } },
+      field('Title', prefix + '-title', title, null, 'wide'),
+      field('Chapters read', prefix + '-ch', ch),
+      field('Total chapters', prefix + '-total', total),
+      field('Status', prefix + '-status', status),
+      field('Websites', prefix + '-sites', sites, 'Separate with commas', 'wide'),
+      field('Cover image', prefix + '-cover', prev, 'Resized to a small thumbnail and saved with the title', 'wide'),
+      field('Note', prefix + '-note', note, null, 'wide'),
+      h('div', { class: 'actions wide' }, buttons));
+  }
+
+  function renderAdd() {
+    var p = document.getElementById('addpanel');
+    p.innerHTML = '';
+    p.hidden = !adding;
+    if (!adding) return;
+    p.appendChild(entryForm('new', newDraft, 'Add to list', function () {
+      var res = parse(newDraft);
+      if (res.error) { say(res.error, true); return; }
+      var v = res.value; v.updated = Date.now(); v.created = v.updated;
+      db.collection(COLLECTION).add(v).then(function () {
+        newDraft = blank(); adding = false; renderAdd(); say('Added ' + v.title + '.');
+      }).catch(function (e) { say(saveMsg(e), true); });
+    }, function () { adding = false; renderAdd(); }));
+    var t = document.getElementById('new-title'); if (t) t.focus();
+  }
+
+  /* ---------- list ---------- */
+  function ago(ts) {
+    if (!ts) return '';
+    var s = Math.max(0, (Date.now() - ts) / 1000);
+    if (s < 90) return 'just now';
+    if (s < 3600) return Math.round(s / 60) + ' min ago';
+    if (s < 86400) return Math.round(s / 3600) + ' h ago';
+    var d = Math.round(s / 86400);
+    if (d < 30) return d + ' d ago';
+    return new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  function siteChip(s) {
+    var looksUrl = /^https?:\/\//i.test(s) || /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(s);
+    if (!looksUrl) return h('span', { class: 'site' }, s);
+    var href = /^https?:\/\//i.test(s) ? s : 'https://' + s;
+    return h('a', { class: 'site', href: href, target: '_blank', rel: 'noopener noreferrer' }, s.replace(/^https?:\/\//i, '').replace(/\/$/, ''));
+  }
+
+  function card(r) {
+    if (editingId === r.id) return editCard(r);
+    var st = LABEL[r.status] ? r.status : 'reading';
+    var pill = canWrite
+      ? h('span', { class: 'pillwrap' }, h('select', { class: 'pill', 'aria-label': 'Status of ' + r.title, onchange: function (e) { setStatus(r.id, e.target.value); } },
+          STATUSES.map(function (s) { return h('option', { value: s.k, selected: s.k === st }, s.l); })))
+      : h('span', { class: 'pillwrap' }, h('span', { class: 'pill' }, LABEL[st]));
+    var pct = r.total ? Math.min(100, Math.round((r.chapter / r.total) * 100)) : null;
+    return h('article', { class: 'card', style: '--c: var(--' + st + ')' },
+      h('div', { class: 'hero' },
+        coverEl(r.cover, r.title),
+        h('div', { class: 'side' },
+          h('div', { class: 'top' }, h('h2', { class: 'name' }, r.title), pill),
+          (r.sites && r.sites.length) ? h('div', { class: 'sites' }, r.sites.map(siteChip)) : h('div', { class: 'nosite' }, 'No website saved'))),
+      h('div', { class: 'counter' },
+        canWrite ? h('button', { class: 'step', type: 'button', 'aria-label': 'One chapter back', disabled: !(r.chapter > 0), onclick: function () { bump(r.id, -1); } }, '−') : null,
+        h('div', { class: 'num' },
+          h('span', { class: 'n' }, r.chapter || 0),
+          totalCtl(r),
+          h('span', { class: 'l' }, totalNote(r))),
+        canWrite ? h('button', { class: 'step plus', type: 'button', 'aria-label': 'One chapter forward', onclick: function () { bump(r.id, 1); } }, '+') : null),
+      pct != null ? h('div', { class: 'bar', role: 'img', 'aria-label': pct + ' percent read' }, h('i', { style: 'width:' + pct + '%' })) : null,
+      r.note ? h('p', { class: 'note' }, r.note) : null,
+      h('div', { class: 'foot' },
+        h('span', { class: 'when' }, r.updated ? 'Updated ' + ago(r.updated) : ''),
+        canWrite ? h('button', { class: 'linkbtn', type: 'button', onclick: function () {
+          editingId = r.id; confirmDel = null;
+          draft = { _id: r.id, title: r.title, chapter: String(r.chapter || 0), total: r.total ? String(r.total) : '', sites: (r.sites || []).join(', '), status: st, note: r.note || '', cover: r.cover || '' };
+          renderList(true);
+          var t = document.getElementById('ed-title'); if (t) t.focus();
+        } }, 'Edit') : null));
+  }
+  function editCard(r) {
+    return h('article', { class: 'card' }, entryForm('ed', draft, 'Save', function () {
+      var res = parse(draft);
+      if (res.error) { say(res.error, true); return; }
+      var v = res.value; v.updated = Date.now();
+      var id = r.id;
+      queue(id, function () { return db.doc(COLLECTION + '/' + id).update(v); }).then(function () {
+        if (editingId === id) { editingId = null; draft = null; renderList(true); }
+      });
+    }, function () { editingId = null; draft = null; confirmDel = null; renderList(true); },
+    function () {
+      var id = r.id;
+      queue(id, function () { return db.doc(COLLECTION + '/' + id).delete(); }).then(function () {
+        editingId = null; draft = null; confirmDel = null; renderList(true); say('Deleted.');
+      });
+    }));
+  }
+
+  function renderChips() {
+    var counts = { all: rows.length };
+    STATUSES.forEach(function (s) { counts[s.k] = 0; });
+    rows.forEach(function (r) { if (counts[r.status] != null) counts[r.status]++; });
+    var box = document.getElementById('chips');
+    box.innerHTML = '';
+    [{ k: 'all', l: 'All' }].concat(STATUSES).forEach(function (s) {
+      box.appendChild(h('button', { class: 'chip', type: 'button', 'aria-pressed': String(filter === s.k), onclick: function () { filter = s.k; renderChips(); renderList(true); } },
+        s.l, h('b', null, counts[s.k] || 0)));
+    });
+    var read = rows.reduce(function (a, r) { return a + (r.chapter || 0); }, 0);
+    document.getElementById('tally').textContent = loaded ? rows.length + (rows.length === 1 ? ' title' : ' titles') + ' · ' + read.toLocaleString() + ' chapters read' : (signedIn ? 'Loading your list…' : '');
+  }
+
+  function renderList(force) {
+    var a = document.activeElement;
+    if (!force && a && listEl.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) { pendingRender = true; return; }
+    pendingRender = false;
+    listEl.innerHTML = '';
+    if (!loaded) return;
+    var q = query.trim().toLowerCase();
+    var shown = rows.filter(function (r) {
+      if (filter !== 'all' && r.status !== filter) return false;
+      if (!q) return true;
+      return (r.title + ' ' + (r.sites || []).join(' ') + ' ' + (r.note || '')).toLowerCase().indexOf(q) !== -1;
+    });
+    shown.sort(function (x, y) {
+      if (sortBy === 'title') return x.title.localeCompare(y.title);
+      if (sortBy === 'chapters') return (y.chapter || 0) - (x.chapter || 0);
+      return (y.updated || 0) - (x.updated || 0);
+    });
+    if (!shown.length) {
+      listEl.style.display = 'block';
+      if (!rows.length) {
+        listEl.appendChild(h('div', { class: 'empty' },
+          h('strong', null, 'Nothing logged yet'),
+          h('span', null, 'Add a title with the chapter you are on, where you read it, and its status.'),
+          canWrite ? h('button', { class: 'btn primary', type: 'button', onclick: function () { adding = true; renderAdd(); } }, 'Add your first manhwa') : null));
+      } else {
+        listEl.appendChild(h('div', { class: 'empty' }, h('span', null, 'No titles match this filter.')));
+      }
+      return;
+    }
+    listEl.style.display = '';
+    shown.forEach(function (r) { listEl.appendChild(card(r)); });
+  }
+  listEl.addEventListener('focusout', function () { if (pendingRender) setTimeout(function () { renderList(false); }, 0); });
+
+  document.getElementById('q').addEventListener('input', function (e) { query = e.target.value; renderList(true); });
+  document.getElementById('sort').addEventListener('change', function (e) { sortBy = e.target.value; renderList(true); });
+  document.getElementById('addbtn').addEventListener('click', function () {
+    if (!db) { say('Saving is not available in this view.', true); return; }
+    adding = !adding; renderAdd();
+  });
+
+  /* ---------- storage: Supabase ---------- */
+  var sb = null;
+  function supabaseDb() {
+    var cache = {}, subs = [], ready = false;
+    function snap() {
+      return { docs: Object.keys(cache).map(function (id) { var v = cache[id]; return { id: id, data: function () { return v; } }; }), metadata: { fromCache: false } };
+    }
+    function emit() { if (ready) subs.forEach(function (f) { f(snap()); }); }
+    function run(builder) { return Promise.resolve(builder).then(function (r) { if (r && r.error) throw r.error; return r; }); }
+    function load() {
+      return run(sb.from(TABLE).select('id, data')).then(function (r) {
+        var o = {}; (r.data || []).forEach(function (x) { o[x.id] = x.data; });
+        cache = o; ready = true; emit();
+      });
+    }
+    function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+    return {
+      all: function () { return cache; },
+      load: load,
+      reset: function () { cache = {}; ready = false; },
+      importAll: function (o) {
+        var rowsOut = Object.keys(o).map(function (k) { return { id: k, data: o[k] }; });
+        return run(sb.from(TABLE).upsert(rowsOut)).then(load);
+      },
+      collection: function () {
+        return {
+          onSnapshot: function (next) { subs.push(next); if (ready) setTimeout(function () { next(snap()); }, 0); return function () {}; },
+          add: function (v) {
+            var id = newId(); cache[id] = v; emit();
+            return run(sb.from(TABLE).insert({ id: id, data: v })).catch(function (e) { delete cache[id]; emit(); throw e; });
+          }
+        };
+      },
+      doc: function (path) {
+        var id = path.split('/')[1];
+        return {
+          update: function (p) {
+            var before = cache[id]; if (!before) return Promise.resolve();
+            var merged = Object.assign({}, before, p); cache[id] = merged; emit();
+            return run(sb.from(TABLE).update({ data: merged }).eq('id', id)).catch(function (e) { cache[id] = before; emit(); throw e; });
+          },
+          delete: function () {
+            var before = cache[id]; delete cache[id]; emit();
+            return run(sb.from(TABLE).delete().eq('id', id)).catch(function (e) { if (before) cache[id] = before; emit(); throw e; });
+          }
+        };
+      }
+    };
+  }
+
+  var currentUid = null;
+  function onSession(session) {
+    var uid = session && session.user ? session.user.id : null;
+    signedIn = !!uid;
+    document.getElementById('login').hidden = signedIn;
+    document.getElementById('app').hidden = !signedIn;
+    document.getElementById('signout').hidden = !signedIn;
+    if (uid === currentUid) return;
+    currentUid = uid;
+    if (!uid) { db.reset(); rows = []; loaded = false; renderChips(); renderList(true); return; }
+    renderChips();
+    db.load().then(function () { say(''); }).catch(function () {
+      document.getElementById('tally').textContent = 'Could not load';
+      say('Could not load your list. Check your connection and that the database setup was run.', true);
+    });
+  }
+
+  function start() {
+    db = supabaseDb();
+    db.collection(COLLECTION).onSnapshot(function (snap) {
+      loaded = true;
+      rows = snap.docs.map(function (doc) {
+        var x = doc.data() || {};
+        return { id: doc.id, title: x.title || 'Untitled', chapter: x.chapter || 0, total: x.total || null, sites: Array.isArray(x.sites) ? x.sites : [], status: x.status || 'reading', note: x.note || '', cover: x.cover || '', updated: x.updated || 0 };
+      });
+      renderChips(); renderList(false);
+    });
+    if (!window.supabase || !SUPABASE_URL || !SUPABASE_KEY || /^PASTE_/.test(SUPABASE_URL) || /^PASTE_/.test(SUPABASE_KEY)) {
+      say('Setup needed: put your Supabase project URL and key in config.js, next to index.html.', true);
+      return;
+    }
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    sb.auth.onAuthStateChange(function (event, session) { setTimeout(function () { onSession(session); }, 0); });
+    document.getElementById('loginform').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var btn = e.target.querySelector('button[type=submit]'); btn.disabled = true;
+      sb.auth.signInWithPassword({ email: document.getElementById('email').value.trim(), password: document.getElementById('password').value })
+        .then(function (r) { if (r.error) say('Could not sign in: ' + r.error.message, true); else say(''); })
+        .catch(function () { say('Could not reach the sign-in service. Check your connection.', true); })
+        .then(function () { btn.disabled = false; });
+    });
+    document.getElementById('signout').addEventListener('click', function () { sb.auth.signOut(); });
+    function refresh() { if (!document.hidden && signedIn) db.load().catch(function () {}); }
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+  }
+
+  document.getElementById('exportbtn').addEventListener('click', function () {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(db.all(), null, 2)], { type: 'application/json' }));
+    a.download = 'manhwa-log-backup.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    say('Backup downloaded.');
+  });
+  document.getElementById('importbtn').addEventListener('click', function () { document.getElementById('importfile').click(); });
+  document.getElementById('importfile').addEventListener('change', function (e) {
+    var f = e.target.files[0]; if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      var o;
+      try { o = JSON.parse(r.result); } catch (x) { o = null; }
+      if (!o || typeof o !== 'object' || Array.isArray(o)) { say('That file is not a Manhwa Log backup.', true); e.target.value = ''; return; }
+      var good = {}, n = 0;
+      Object.keys(o).forEach(function (k) { if (o[k] && typeof o[k].title === 'string') { good[k] = o[k]; n++; } });
+      if (!n) { say('That file has no titles in it.', true); e.target.value = ''; return; }
+      db.importAll(good).then(function () { say('Imported ' + n + (n === 1 ? ' title.' : ' titles.')); })
+        .catch(function () { say('Import failed. Check your connection and try again.', true); });
+      e.target.value = '';
+    };
+    r.readAsText(f);
+  });
+
+  renderChips();
+  start();
+})();
+</script>
+
+</body>
+</html>
